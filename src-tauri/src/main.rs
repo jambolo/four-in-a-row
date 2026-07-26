@@ -2,10 +2,9 @@
 //!
 //! This binary owns the window and exposes the Four In A Row game core to
 //! the web UI as a small set of commands. It contains no game logic — that
-//! lives in the core crate (grid state, move rules, win detection). Keep
-//! this layer thin: translate between core types and the JSON protocol the
-//! front end renders, and hand heavy work to
-//! `tauri::async_runtime::spawn_blocking` so the UI never freezes.
+//! lives in the core crate (grid state, move rules, win detection). All it
+//! does is translate between core types and the JSON protocol the front end
+//! renders.
 
 // Hide the console window on Windows in release builds.
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]

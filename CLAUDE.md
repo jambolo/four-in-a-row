@@ -4,12 +4,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A two-player, drop-a-disc grid game for the desktop, built with Tauri (Rust backend + TypeScript/Vite frontend, pnpm).
+A two-player, drop-a-disc grid game for the desktop, built with Tauri (Rust backend + TypeScript/Vite frontend, pnpm). The two-player game is implemented; the next planned step is a computer player using the `game-player` crate.
 
-Plan:
-
-1. Implement two-player game of Four In A Row.
-2. Add computer player using the `game-player` crate.
+`docs/rules.md` is the authoritative rules reference (7×6 board, gravity drops, 69 possible win lines, win/draw conditions, move notation). Base game only — the variants in its §10 are out of scope unless explicitly requested.
 
 ## Commands
 
@@ -27,17 +24,23 @@ cargo fmt --all --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 ```
 
-Build order matters: `tauri::generate_context!` embeds `dist/` at compile time, so `pnpm build` must run before any `cargo build`/`clippy` on a clean checkout.
+Build order matters: `tauri::generate_context!` embeds `dist/` at compile time, so `pnpm build` must run before any `cargo build`/`clippy`/`cargo test` on a clean checkout.
 
 ## Architecture
 
-Three layers, strict separation:
+Three layers, strict separation. The Rust core is the single source of truth for legality and wins; the frontend never decides them.
 
-- `src-core/` — `four-in-a-row-core`: UI-agnostic Rust crate. All game logic (grid state, move rules, win detection) belongs here. No Tauri dependency; tests run headless. Rust edition 2024.
-- `src-tauri/` — `four-in-a-row`: thin Tauri shell. Owns the window, exposes core functions as Tauri commands, contains no game logic. Translates core types to a JSON protocol (camelCase via serde). Heavy work goes through `tauri::async_runtime::spawn_blocking`. Shell tests pin the wire shapes, not logic.
-- `src/` — frontend. `api.ts` is the *only* module that imports `@tauri-apps/api`; every backend call goes through it, and its interfaces mirror the shell's serde structs. `main.ts` renders and forwards user intent; it holds no game logic — the Rust core is the single source of truth.
+- `src-core/` — `four-in-a-row-core`: UI-agnostic, dependency-free Rust crate holding the whole rules engine (`Game` in `game.rs`: grid state, move legality, gravity drop, win/draw detection). No Tauri dependency; tests run headless. Rust edition 2024.
+- `src-tauri/` — `four-in-a-row`: thin Tauri shell. Owns the window and the single `Mutex<Game>` managed state; exposes exactly three commands — `new_game`, `drop_disc`, `get_state` — each returning the full `GameStateDto`. No game logic here. Shell tests pin the wire shapes, not logic.
+- `src/` — frontend, vanilla TypeScript (no framework). `api.ts` is the *only* module that imports `@tauri-apps/api`; its types mirror the shell's serde structs. `view.ts` renders game state into the DOM; `main.ts` is the controller wiring input to `api` and `view`; `styles.css` holds all styling.
 
-The current `greet` command is skeleton wiring proving the round trip; replace it with real grid/move commands as the game is implemented.
+### Wire protocol
+
+Defined by the shell's serde structs, mirrored by hand in `src/api.ts` — change both together, and update the shell's serialization tests that pin the JSON shapes.
+
+- camelCase JSON; board is column-major: `board[col][row]`, col 0 = leftmost, row 0 = bottom.
+- Cells/players are string codes: `"empty" | "p1" | "p2"`.
+- `drop_disc` rejects with error-code strings: `invalidColumn | columnFull | gameOver`.
 
 ## Releases and versioning
 
