@@ -1,0 +1,42 @@
+:root {
+  color-scheme: light dark;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  display: flex;
+  justify-content: center;
+  font-family: system-ui, sans-serif;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+#app {
+  width: 100%;
+  max-width: 480px;
+  padding: 32px 20px;
+  text-align: center;
+}
+
+#greet-form {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+#greet-input {
+  flex: 1;
+  padding: 8px 12px;
+  font-size: 1rem;
+}
+
+#greet-output {
+  min-height: 1.4em;
+  margin-top: 20px;
+  font-size: 1.1rem;
+}

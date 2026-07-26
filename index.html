@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Four In A Row</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <main id="app">
+      <h1>Four In A Row</h1>
+      <!-- Skeleton wiring sample: proves the Rust core <-> Tauri <-> UI round
+           trip works end to end. Replace with the grid and disc-drop controls
+           once game logic lands in src-core. -->
+      <form id="greet-form">
+        <input id="greet-input" placeholder="Enter a name…" autocomplete="off" />
+        <button type="submit">Greet</button>
+      </form>
+      <p id="greet-output" role="status" aria-live="polite"></p>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

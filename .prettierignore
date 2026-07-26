@@ -1,0 +1,10 @@
+pnpm-lock.yaml
+node_modules
+dist/
+coverage/
+target/
+src-tauri/gen/
+src-tauri/icons/
+*.md
+*.yaml
+*.yml
