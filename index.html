@@ -9,14 +9,12 @@
   <body>
     <main id="app">
       <h1>Four In A Row</h1>
-      <!-- Skeleton wiring sample: proves the Rust core <-> Tauri <-> UI round
-           trip works end to end. Replace with the grid and disc-drop controls
-           once game logic lands in src-core. -->
-      <form id="greet-form">
-        <input id="greet-input" placeholder="Enter a name…" autocomplete="off" />
-        <button type="submit">Greet</button>
-      </form>
-      <p id="greet-output" role="status" aria-live="polite"></p>
+      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <div id="board" class="board" data-locked="false" aria-label="Game board"></div>
+      <p id="hint" class="hint">Click a column to drop a disc, or press 1-7.</p>
+      <div class="controls">
+        <button id="restart" class="button" type="button">Restart</button>
+      </div>
     </main>
     <script type="module" src="/src/main.ts"></script>
   </body>

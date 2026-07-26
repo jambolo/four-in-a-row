@@ -7,27 +7,76 @@
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { afterEach, describe, expect, it } from 'vitest';
 import { api } from './api';
+import type { GameState } from './api';
 
 afterEach(() => {
   clearMocks();
 });
 
+const freshState: GameState = {
+  board: [
+    ['empty', 'empty', 'empty', 'empty', 'empty', 'empty'],
+    ['empty', 'empty', 'empty', 'empty', 'empty', 'empty'],
+    ['empty', 'empty', 'empty', 'empty', 'empty', 'empty'],
+    ['empty', 'empty', 'empty', 'empty', 'empty', 'empty'],
+    ['empty', 'empty', 'empty', 'empty', 'empty', 'empty'],
+    ['empty', 'empty', 'empty', 'empty', 'empty', 'empty'],
+    ['empty', 'empty', 'empty', 'empty', 'empty', 'empty'],
+  ],
+  toMove: 'p1',
+  status: 'inProgress',
+  winner: null,
+  winningCells: [],
+  legalMoves: [0, 1, 2, 3, 4, 5, 6],
+  lastMove: null,
+  moveCount: 0,
+};
+
 describe('api', () => {
-  it('greet invokes the greet command with the name', async () => {
+  it('newGame invokes the new_game command', async () => {
     const calls: Array<{ cmd: string; args: unknown }> = [];
     mockIPC((cmd, args) => {
       calls.push({ cmd, args });
-      return { message: 'Hello, world, from the Rust core!' };
+      return freshState;
     });
-    const result = await api.greet('world');
-    expect(calls).toEqual([{ cmd: 'greet', args: { name: 'world' } }]);
-    expect(result).toEqual({ message: 'Hello, world, from the Rust core!' });
+    const result = await api.newGame();
+    expect(calls.map((call) => call.cmd)).toEqual(['new_game']);
+    expect(result).toEqual(freshState);
   });
 
-  it('rejects when the backend rejects', async () => {
-    mockIPC(() => {
-      throw 'backend error';
+  it('getState invokes the get_state command', async () => {
+    const calls: Array<{ cmd: string; args: unknown }> = [];
+    mockIPC((cmd, args) => {
+      calls.push({ cmd, args });
+      return freshState;
     });
-    await expect(api.greet('world')).rejects.toBe('backend error');
+    const result = await api.getState();
+    expect(calls.map((call) => call.cmd)).toEqual(['get_state']);
+    expect(result).toEqual(freshState);
+  });
+
+  it('dropDisc invokes the drop_disc command with the 0-indexed column', async () => {
+    const calls: Array<{ cmd: string; args: unknown }> = [];
+    const stateAfterMove: GameState = {
+      ...freshState,
+      board: freshState.board.map((column, index) => (index === 3 ? ['p1', 'empty', 'empty', 'empty', 'empty', 'empty'] : column)),
+      toMove: 'p2',
+      lastMove: { col: 3, row: 0 },
+      moveCount: 1,
+    };
+    mockIPC((cmd, args) => {
+      calls.push({ cmd, args });
+      return stateAfterMove;
+    });
+    const result = await api.dropDisc(3);
+    expect(calls).toEqual([{ cmd: 'drop_disc', args: { col: 3 } }]);
+    expect(result).toEqual(stateAfterMove);
+  });
+
+  it('dropDisc rejects with the backend error code', async () => {
+    mockIPC(() => {
+      throw 'columnFull';
+    });
+    await expect(api.dropDisc(0)).rejects.toBe('columnFull');
   });
 });
