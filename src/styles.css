@@ -138,6 +138,7 @@ h1 {
 
 .cell--ghost[data-ghost='p2'] .disc {
   background: #f4c542;
+  opacity: 0.6;
 }
 
 @keyframes drop {
