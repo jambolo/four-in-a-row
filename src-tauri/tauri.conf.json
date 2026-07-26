@@ -14,8 +14,10 @@
       {
         "label": "main",
         "title": "Four In A Row",
-        "width": 800,
-        "height": 600,
+        "width": 900,
+        "height": 800,
+        "minWidth": 640,
+        "minHeight": 640,
         "resizable": true
       }
     ],
