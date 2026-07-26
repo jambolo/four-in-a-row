@@ -1,0 +1,5 @@
+[package]
+name = "four-in-a-row-core"
+version = "0.1.0"
+edition = "2024"
+description = "UI-agnostic game core: grid state, move rules, and win detection. The Tauri shell stays thin."
