@@ -10,7 +10,7 @@ A two-player, drop-a-disc grid game for the desktop, built with Tauri.
 - Hovering a column that still has room previews the landing spot with a translucent ghost disc. A full column shows no ghost and a not-allowed cursor.
 - The first player to line up four or more of their discs — horizontally, vertically, or diagonally — wins; the winning line is highlighted and a banner announces the winner.
 - If all 42 cells fill with no line of four, the game ends in a draw.
-- The "New game" button restarts at any time; a "Play again" button appears once the game ends.
+- A single button under the board starts a fresh game at any time. It reads "Restart" while a game is ongoing and "Play Again" once the game ends.
 
 ## Architecture
 

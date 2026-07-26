@@ -1,4 +1,4 @@
-// Pure DTO-to-DOM renderer for the game board, status line and play-again
+// Pure DTO-to-DOM renderer for the game board, status line and restart
 // button. This module never talks to the backend and never decides legality
 // or win conditions — it only turns a `GameState` the Rust core already
 // produced into DOM, and back out again (the hover ghost) into query params
@@ -14,7 +14,7 @@ const ROWS = 6;
 export interface ViewElements {
   board: HTMLElement;
   status: HTMLElement;
-  playAgain: HTMLElement;
+  restart: HTMLElement;
 }
 
 const PLAYER_NAMES: Record<PlayerId, string> = {
@@ -106,7 +106,11 @@ export function render(el: ViewElements, state: GameState): void {
 
   renderStatus(el.status, state);
 
-  el.playAgain.hidden = state.status === 'inProgress';
+  // One button serves both roles: mid-game it is an escape hatch, at game end
+  // it is the primary call to action.
+  const over = state.status !== 'inProgress';
+  el.restart.textContent = over ? 'Play Again' : 'Restart';
+  el.restart.classList.toggle('button--primary', over);
 }
 
 /** Remove any hover-preview ghost disc from `board`. */

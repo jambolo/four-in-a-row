@@ -32,12 +32,12 @@ function makeElements(): ViewElements {
   document.body.innerHTML = `
     <p id="status"></p>
     <div id="board"></div>
-    <button id="play-again" hidden></button>
+    <button id="restart" class="button">Restart</button>
   `;
   return {
     status: document.getElementById('status') as HTMLElement,
     board: document.getElementById('board') as HTMLElement,
-    playAgain: document.getElementById('play-again') as HTMLElement,
+    restart: document.getElementById('restart') as HTMLElement,
   };
 }
 
@@ -188,14 +188,23 @@ describe('render: locked / legality when the game is over', () => {
   });
 });
 
-describe('render: play-again visibility', () => {
-  it('hides play-again while inProgress and shows it otherwise', () => {
+describe('render: restart button', () => {
+  it('says Restart while inProgress and Play Again otherwise', () => {
     const el = makeElements();
     render(el, makeState({ status: 'inProgress' }));
-    expect(el.playAgain.hidden).toBe(true);
+    expect(el.restart.textContent).toBe('Restart');
+    expect(el.restart.classList.contains('button--primary')).toBe(false);
 
     render(el, makeState({ status: 'draw', legalMoves: [] }));
-    expect(el.playAgain.hidden).toBe(false);
+    expect(el.restart.textContent).toBe('Play Again');
+    expect(el.restart.classList.contains('button--primary')).toBe(true);
+
+    render(el, makeState({ status: 'won', winner: 'p1', legalMoves: [] }));
+    expect(el.restart.textContent).toBe('Play Again');
+
+    render(el, makeState({ status: 'inProgress' }));
+    expect(el.restart.textContent).toBe('Restart');
+    expect(el.restart.classList.contains('button--primary')).toBe(false);
   });
 });
 

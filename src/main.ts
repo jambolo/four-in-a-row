@@ -10,10 +10,9 @@ import type { GameState } from './api';
 
 const board = document.getElementById('board') as HTMLElement;
 const status = document.getElementById('status') as HTMLElement;
-const playAgain = document.getElementById('play-again') as HTMLElement;
-const newGameButton = document.getElementById('new-game') as HTMLElement;
+const restart = document.getElementById('restart') as HTMLElement;
 
-const elements = { board, status, playAgain };
+const elements = { board, status, restart };
 
 let state: GameState | null = null;
 
@@ -68,11 +67,7 @@ document.onkeydown = (event) => {
   }
 };
 
-newGameButton.addEventListener('click', () => {
-  start();
-});
-
-playAgain.addEventListener('click', () => {
+restart.addEventListener('click', () => {
   start();
 });
 

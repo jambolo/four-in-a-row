@@ -26,8 +26,7 @@ const SHELL = `
     <div id="board" class="board" data-locked="false" aria-label="Game board"></div>
     <p id="hint" class="hint">Click a column to drop a disc, or press 1-7.</p>
     <div class="controls">
-      <button id="new-game" class="button" type="button">New game</button>
-      <button id="play-again" class="button button--primary" type="button" hidden>Play again</button>
+      <button id="restart" class="button" type="button">Restart</button>
     </div>
   </main>
 `;
@@ -175,20 +174,25 @@ describe('game over', () => {
   });
 });
 
-describe('new game / play again', () => {
-  it('clicking play-again calls api.newGame and renders the result', async () => {
+describe('restart / play again', () => {
+  const restart = () => document.getElementById('restart') as HTMLElement;
+
+  it('clicking it after game end calls api.newGame and renders the result', async () => {
     await boot(makeState({ status: 'draw', legalMoves: [] }));
+    expect(restart().textContent).toBe('Play Again');
     mockApi.newGame.mockResolvedValueOnce(makeState());
-    document.getElementById('play-again')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    restart().dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flush();
     expect(mockApi.newGame).toHaveBeenCalledTimes(1);
     expect(status().textContent).toBe("Red's turn");
+    expect(restart().textContent).toBe('Restart');
   });
 
-  it('clicking new-game calls api.newGame', async () => {
+  it('clicking it mid-game calls api.newGame', async () => {
     await boot(makeState());
+    expect(restart().textContent).toBe('Restart');
     mockApi.newGame.mockResolvedValueOnce(makeState());
-    document.getElementById('new-game')!.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    restart().dispatchEvent(new MouseEvent('click', { bubbles: true }));
     await flush();
     expect(mockApi.newGame).toHaveBeenCalledTimes(1);
   });
