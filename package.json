@@ -1,0 +1,26 @@
+{
+  "name": "four-in-a-row",
+  "version": "0.1.0",
+  "description": "Two-player drop-a-disc grid game, built with Tauri.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "test": "vitest run",
+    "coverage": "vitest run --coverage --coverage.reporter=lcov",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
+  },
+  "keywords": [],
+  "author": "John Bolton <jambolo@users.noreply.github.com> (https://jambolo.github.io)",
+  "license": "MIT",
+  "packageManager": "pnpm@10.20.0",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}
