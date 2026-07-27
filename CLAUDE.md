@@ -4,13 +4,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A two-player, drop-a-disc grid game for the desktop, built with Tauri (Rust backend + TypeScript/Vite frontend, pnpm). The two-player game is implemented; the next planned step is a computer player using the `game-player` crate.
+A two-player, drop-a-disc grid game for the desktop, built with Tauri (Rust backend + TypeScript/Vite frontend, pnpm). The two-player game is implemented; the next planned step is a computer player using the `game-player` crate, which is vendored as a submodule and already wired in as a dependency of `src-core` (nothing uses it yet).
 
 `docs/rules.md` is the authoritative rules reference (7×6 board, gravity drops, 69 possible win lines, win/draw conditions, move notation). Base game only — the variants in its §10 are out of scope unless explicitly requested.
 
 ## Commands
 
 ```bash
+git submodule update --init --recursive   # fetch vendor/game-player (required before any cargo command)
 pnpm install             # install frontend deps
 pnpm tauri dev           # run the app (dev, hot reload)
 pnpm build               # typecheck + build frontend into dist/
@@ -30,9 +31,17 @@ Build order matters: `tauri::generate_context!` embeds `dist/` at compile time, 
 
 Three layers, strict separation. The Rust core is the single source of truth for legality and wins; the frontend never decides them.
 
-- `src-core/` — `four-in-a-row-core`: UI-agnostic, dependency-free Rust crate holding the whole rules engine (`Game` in `game.rs`: grid state, move legality, gravity drop, win/draw detection). No Tauri dependency; tests run headless. Rust edition 2024.
+- `src-core/` — `four-in-a-row-core`: UI-agnostic Rust crate holding the whole rules engine (`Game` in `game.rs`: grid state, move legality, gravity drop, win/draw detection). Its only dependency is `game-player` (see below). No Tauri dependency; tests run headless. Rust edition 2024.
 - `src-tauri/` — `four-in-a-row`: thin Tauri shell. Owns the window and the single `Mutex<Game>` managed state; exposes exactly three commands — `new_game`, `drop_disc`, `get_state` — each returning the full `GameStateDto`. No game logic here. Shell tests pin the wire shapes, not logic.
 - `src/` — frontend, vanilla TypeScript (no framework). `api.ts` is the *only* module that imports `@tauri-apps/api`; its types mirror the shell's serde structs. `view.ts` renders game state into the DOM; `main.ts` is the controller wiring input to `api` and `view`; `styles.css` holds all styling.
+
+### Vendored `game-player`
+
+`vendor/game-player` is a git submodule (`https://github.com/jambolo/game-player.git`) providing the AI-player scaffolding for the planned computer player. It is third-party code — do not edit it from this repo; change it upstream and bump the submodule pointer.
+
+- The workspace `exclude`s it, so `cargo test --workspace`, `cargo fmt --all`, and `cargo clippy --workspace` skip it. It still compiles as a path dependency of `src-core`.
+- CI/CD checkouts use `submodules: recursive`; a clean checkout without it fails to build.
+- Bump it with `git submodule update --remote vendor/game-player`, then commit the new pointer.
 
 ### Wire protocol
 
