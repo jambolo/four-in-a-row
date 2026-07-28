@@ -1,6 +1,6 @@
 [package]
 name = "four-in-a-row"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2024"
 description = "Tauri shell: owns the window and exposes the Four In A Row game core to the web UI."
 
