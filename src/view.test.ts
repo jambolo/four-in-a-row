@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 import type { CellValue, GameState } from './api';
-import { clearGhost, render, showGhost, statusText, type ViewElements } from './view';
+import { clearGhost, isHumanTurn, render, showGhost, statusText, type ViewElements } from './view';
 
 /** A fresh 7-column x 6-row empty board. */
 function emptyBoard(): CellValue[][] {
@@ -23,6 +23,11 @@ function makeState(overrides: Partial<GameState> = {}): GameState {
     legalMoves: [0, 1, 2, 3, 4, 5, 6],
     lastMove: null,
     moveCount: 0,
+    players: { p1: 'human', p2: 'human' },
+    searchDepth: 7,
+    thinking: false,
+    paused: false,
+    generation: 0,
     ...overrides,
   };
 }
@@ -33,11 +38,13 @@ function makeElements(): ViewElements {
     <p id="status"></p>
     <div id="board"></div>
     <button id="restart" class="button">Restart</button>
+    <button id="pause" class="button" hidden>Pause</button>
   `;
   return {
     status: document.getElementById('status') as HTMLElement,
     board: document.getElementById('board') as HTMLElement,
     restart: document.getElementById('restart') as HTMLElement,
+    pause: document.getElementById('pause') as HTMLElement,
   };
 }
 
@@ -257,5 +264,151 @@ describe('showGhost / clearGhost', () => {
     const cell = cellAt(el.board, 0, 0);
     expect(el.board.querySelectorAll('.cell--ghost')).toHaveLength(0);
     expect(cell.hasAttribute('data-ghost')).toBe(false);
+  });
+
+  it('adds nothing while a search is in flight', () => {
+    const el = makeElements();
+    const state = makeState({ thinking: true });
+    render(el, state);
+
+    showGhost(el.board, 0, state);
+
+    expect(el.board.querySelectorAll('.cell--ghost')).toHaveLength(0);
+  });
+
+  it('adds nothing when the side to move is played by a computer', () => {
+    const el = makeElements();
+    const state = makeState({ players: { p1: 'computer', p2: 'human' }, toMove: 'p1' });
+    render(el, state);
+
+    showGhost(el.board, 0, state);
+
+    expect(el.board.querySelectorAll('.cell--ghost')).toHaveLength(0);
+  });
+});
+
+describe('isHumanTurn', () => {
+  it('is true for the default in-progress both-human fixture', () => {
+    expect(isHumanTurn(makeState())).toBe(true);
+  });
+
+  it('is false while a search is in flight', () => {
+    expect(isHumanTurn(makeState({ thinking: true }))).toBe(false);
+  });
+
+  it('is false when the side to move is played by a computer', () => {
+    const state = makeState({ players: { p1: 'computer', p2: 'human' }, toMove: 'p1' });
+    expect(isHumanTurn(state)).toBe(false);
+  });
+
+  it('is true when the human side is to move in a mixed game', () => {
+    const state = makeState({ players: { p1: 'computer', p2: 'human' }, toMove: 'p2' });
+    expect(isHumanTurn(state)).toBe(true);
+  });
+
+  it('is false when the game has been won', () => {
+    expect(isHumanTurn(makeState({ status: 'won', winner: 'p1', winningCells: [{ col: 0, row: 0 }] }))).toBe(false);
+  });
+
+  it('is false on a draw', () => {
+    expect(isHumanTurn(makeState({ status: 'draw', legalMoves: [] }))).toBe(false);
+  });
+});
+
+describe('statusText: thinking', () => {
+  it('reports which side is thinking, matching #status after render', () => {
+    const cases: Array<[Partial<GameState>, string]> = [
+      [{ toMove: 'p1', thinking: true }, 'Red is thinking…'],
+      [{ toMove: 'p2', thinking: true }, 'Yellow is thinking…'],
+    ];
+
+    for (const [overrides, expected] of cases) {
+      expect(statusText(makeState(overrides))).toBe(expected);
+
+      const el = makeElements();
+      render(el, makeState(overrides));
+      expect(el.status.textContent).toBe(expected);
+    }
+  });
+
+  it('a win still wins over thinking', () => {
+    const state = makeState({ status: 'won', winner: 'p1', winningCells: [{ col: 0, row: 0 }], thinking: true });
+    expect(statusText(state)).toBe('Red wins!');
+  });
+
+  it('a draw still wins over thinking', () => {
+    const state = makeState({ status: 'draw', legalMoves: [], thinking: true });
+    expect(statusText(state)).toBe("It's a draw!");
+  });
+});
+
+describe('render: data-thinking', () => {
+  it('is true on the status element while a search is in flight', () => {
+    const el = makeElements();
+    render(el, makeState({ thinking: true }));
+
+    expect(el.status.getAttribute('data-thinking')).toBe('true');
+  });
+
+  it('is false for the default fixture', () => {
+    const el = makeElements();
+    render(el, makeState());
+
+    expect(el.status.getAttribute('data-thinking')).toBe('false');
+  });
+});
+
+describe('render: locked / legality while thinking or a computer is to move', () => {
+  it('locks the board and every column while a search is in flight', () => {
+    const el = makeElements();
+    render(el, makeState({ thinking: true }));
+
+    expect(el.board.getAttribute('data-locked')).toBe('true');
+    for (const column of columns(el.board)) {
+      expect(column.getAttribute('data-legal')).toBe('false');
+      expect(column.getAttribute('aria-disabled')).toBe('true');
+    }
+  });
+
+  it('locks the board when the side to move is a computer, and unlocks it for the human side', () => {
+    const el = makeElements();
+    const players = { p1: 'computer' as const, p2: 'human' as const };
+
+    render(el, makeState({ players, toMove: 'p1' }));
+    expect(el.board.getAttribute('data-locked')).toBe('true');
+    for (const column of columns(el.board)) {
+      expect(column.getAttribute('data-legal')).toBe('false');
+    }
+
+    render(el, makeState({ players, toMove: 'p2' }));
+    expect(el.board.getAttribute('data-locked')).toBe('false');
+    for (const column of columns(el.board)) {
+      expect(column.getAttribute('data-legal')).toBe('true');
+    }
+  });
+});
+
+describe('render: pause button', () => {
+  it('is hidden when both sides are human', () => {
+    const el = makeElements();
+    render(el, makeState());
+
+    expect(el.pause?.hidden).toBe(true);
+  });
+
+  it('is visible and reads Pause when a side is a computer and not paused', () => {
+    const el = makeElements();
+    render(el, makeState({ players: { p1: 'computer', p2: 'human' }, paused: false }));
+
+    expect(el.pause?.hidden).toBe(false);
+    expect(el.pause?.textContent).toBe('Pause');
+  });
+
+  it('reads Resume when paused', () => {
+    const el = makeElements();
+    render(el, makeState({ players: { p1: 'computer', p2: 'human' }, paused: true }));
+
+    expect(el.pause?.hidden).toBe(false);
+    expect(el.pause?.textContent).toBe('Resume');
   });
 });

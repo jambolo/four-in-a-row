@@ -1,5 +1,8 @@
 [package]
 name = "four-in-a-row-core"
-version = "1.0.0"
+version = "1.1.0"
 edition = "2024"
 description = "UI-agnostic game core: grid state, move rules, and win detection. The Tauri shell stays thin."
+
+[dependencies]
+game-player = { path = "../vendor/game-player" }

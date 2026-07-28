@@ -9,11 +9,32 @@
   <body>
     <main id="app">
       <h1>Four In A Row</h1>
-      <p id="status" class="status" role="status" aria-live="polite"></p>
+      <p id="status" class="status" role="status" aria-live="polite" data-thinking="false"></p>
       <div id="board" class="board" data-locked="false" aria-label="Game board"></div>
       <p id="hint" class="hint">Click a column to drop a disc, or press 1-7.</p>
+      <div class="settings">
+        <label class="setting" for="p1-kind">
+          <span class="swatch" data-player="p1"></span>
+          <select id="p1-kind" class="select">
+            <option value="human">Human</option>
+            <option value="computer">Computer</option>
+          </select>
+        </label>
+        <label class="setting" for="p2-kind">
+          <span class="swatch" data-player="p2"></span>
+          <select id="p2-kind" class="select">
+            <option value="human">Human</option>
+            <option value="computer">Computer</option>
+          </select>
+        </label>
+        <label class="setting" for="depth">
+          <span class="setting__label">Depth</span>
+          <input id="depth" class="number" type="number" min="1" max="42" step="1" value="7" />
+        </label>
+      </div>
       <div class="controls">
         <button id="restart" class="button" type="button">Restart</button>
+        <button id="pause" class="button" type="button" hidden>Pause</button>
       </div>
     </main>
     <script type="module" src="/src/main.ts"></script>

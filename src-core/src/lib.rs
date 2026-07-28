@@ -6,5 +6,7 @@
 //! live here; the `src-tauri` shell exposes them through a thin command
 //! layer.
 
+mod ai;
 mod game;
+pub use ai::{Evaluator, Generator, Position, choose_move};
 pub use game::{COLS, Game, MoveError, Player, ROWS, Status};

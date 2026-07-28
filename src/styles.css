@@ -211,3 +211,72 @@ h1 {
     animation: none;
   }
 }
+
+.settings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 20px;
+}
+
+.setting {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.95rem;
+}
+
+.setting__label {
+  color: color-mix(in srgb, currentColor 70%, transparent);
+}
+
+.select,
+.number {
+  border: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+  border-radius: 8px;
+  padding: 6px 8px;
+  font: inherit;
+  background: Canvas;
+  color: CanvasText;
+}
+
+/* The dropdown popup is painted by the platform, not by the page, so its
+   options need their own colours: inheriting the page's would put light text
+   on the popup's own light surface. `Canvas`/`CanvasText` track
+   `color-scheme`, so this stays right in both light and dark. */
+.select option {
+  background: Canvas;
+  color: CanvasText;
+}
+
+.number {
+  width: 4.5em;
+}
+
+.select:focus-visible,
+.number:focus-visible {
+  outline: 3px solid #1e4fd8;
+  outline-offset: 2px;
+}
+
+@keyframes thinking-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.3;
+  }
+}
+
+.status[data-thinking='true'] .swatch {
+  animation: thinking-pulse 1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status[data-thinking='true'] .swatch {
+    animation: none;
+  }
+}
