@@ -815,7 +815,7 @@ dependencies = [
 
 [[package]]
 name = "four-in-a-row"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "four-in-a-row-core",
  "serde",
@@ -826,7 +826,7 @@ dependencies = [
 
 [[package]]
 name = "four-in-a-row-core"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "game-player",
 ]
