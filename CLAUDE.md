@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project
 
-A two-player, drop-a-disc grid game for the desktop, built with Tauri (Rust backend + TypeScript/Vite frontend, pnpm). The two-player game is implemented; the next planned step is a computer player using the `game-player` crate, which is vendored as a submodule and already wired in as a dependency of `src-core` (nothing uses it yet).
+A drop-a-disc grid game for the desktop, built with Tauri (Rust backend + TypeScript/Vite frontend, pnpm). The game is playable with zero, one, or two computer players — each of P1 and P2 is independently set to human or computer — driven by a minimax search in the vendored `game-player` crate at a user-chosen fixed depth of 1 to 42 plies.
 
 `docs/rules.md` is the authoritative rules reference (7×6 board, gravity drops, 69 possible win lines, win/draw conditions, move notation). Base game only — the variants in its §10 are out of scope unless explicitly requested.
 
@@ -31,13 +31,13 @@ Build order matters: `tauri::generate_context!` embeds `dist/` at compile time, 
 
 Three layers, strict separation. The Rust core is the single source of truth for legality and wins; the frontend never decides them.
 
-- `src-core/` — `four-in-a-row-core`: UI-agnostic Rust crate holding the whole rules engine (`Game` in `game.rs`: grid state, move legality, gravity drop, win/draw detection). Its only dependency is `game-player` (see below). No Tauri dependency; tests run headless. Rust edition 2024.
-- `src-tauri/` — `four-in-a-row`: thin Tauri shell. Owns the window and the single `Mutex<Game>` managed state; exposes exactly three commands — `new_game`, `drop_disc`, `get_state` — each returning the full `GameStateDto`. No game logic here. Shell tests pin the wire shapes, not logic.
-- `src/` — frontend, vanilla TypeScript (no framework). `api.ts` is the *only* module that imports `@tauri-apps/api`; its types mirror the shell's serde structs. `view.ts` renders game state into the DOM; `main.ts` is the controller wiring input to `api` and `view`; `styles.css` holds all styling.
+- `src-core/` — `four-in-a-row-core`: UI-agnostic Rust crate holding the whole rules engine (`Game` in `game.rs`: grid state, move legality, gravity drop, win/draw detection) and the computer player (`ai.rs`: a bitboard `Position`, an `Evaluator`, a `Generator`, and the entry point `choose_move(game, depth) -> Option<usize>`, built on the vendored `game-player` crate's alpha-beta minimax search). The search depth is a hard fixed ply count — no time limit, no iterative deepening. Its only dependency is `game-player` (see below). No Tauri dependency; tests run headless. Rust edition 2024.
+- `src-tauri/` — `four-in-a-row`: thin Tauri shell. Owns the window and a single `Mutex<App>` managed state (`Game` + `Config` + `thinking` flag + `paused` flag + `generation` counter); exposes four commands — `new_game`, `drop_disc`, `get_state`, `set_paused` — each returning the full `GameStateDto`. When the side to move is a computer, it runs `choose_move` on a background thread and delivers the result to the front end as an `ai-move` event; a result whose captured `generation` no longer matches is discarded silently — that's how a new game cancels an in-flight search. No game logic here. Shell tests pin the wire shapes, not logic.
+- `src/` — frontend, vanilla TypeScript (no framework). `api.ts` is the *only* module that imports `@tauri-apps/api` (including `@tauri-apps/api/event` for the `ai-move` listener); its types mirror the shell's serde structs. `view.ts` renders game state into the DOM; `main.ts` is the controller wiring input to `api` and `view`; `styles.css` holds all styling.
 
 ### Vendored `game-player`
 
-`vendor/game-player` is a git submodule (`https://github.com/jambolo/game-player.git`) providing the AI-player scaffolding for the planned computer player. It is third-party code — do not edit it from this repo; change it upstream and bump the submodule pointer.
+`vendor/game-player` is a git submodule (`https://github.com/jambolo/game-player.git`) backing the shipped computer player in `src-core/src/ai.rs`. It is third-party code — do not edit it from this repo; change it upstream and bump the submodule pointer.
 
 - The workspace `exclude`s it, so `cargo test --workspace`, `cargo fmt --all`, and `cargo clippy --workspace` skip it. It still compiles as a path dependency of `src-core`.
 - CI/CD checkouts use `submodules: recursive`; a clean checkout without it fails to build.
@@ -49,7 +49,11 @@ Defined by the shell's serde structs, mirrored by hand in `src/api.ts` — chang
 
 - camelCase JSON; board is column-major: `board[col][row]`, col 0 = leftmost, row 0 = bottom.
 - Cells/players are string codes: `"empty" | "p1" | "p2"`.
-- `drop_disc` rejects with error-code strings: `invalidColumn | columnFull | gameOver`.
+- `GameStateDto` also carries `players` (`{ p1, p2 }`, each `"human" | "computer"`), `searchDepth` (1..=42), `thinking` (bool), `paused` (bool), `generation` (u64, bumped on every new game).
+- Command replies and `ai-move` events are two unordered channels, so the frontend orders states by `(generation, moveCount)` and drops any that is older than what it already holds — without that, a slow reply overwrites a win the search just pushed.
+- `new_game` takes `{ p1, p2, searchDepth }` and rejects an out-of-range depth with error code `invalidDepth`.
+- `drop_disc` rejects with error-code strings: `invalidColumn | columnFull | gameOver | notHumanTurn` — the last covers both "it is a computer's turn" and "a search is in flight".
+- The shell emits an `ai-move` event carrying a full `GameStateDto` after a computer move; the front end listens for it.
 
 ## Releases and versioning
 

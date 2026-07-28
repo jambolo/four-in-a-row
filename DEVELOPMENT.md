@@ -6,9 +6,9 @@ Everything needed to set up, build, run, debug, and test Four In A Row.
 
 Three layers with strict separation. The Rust core is the single source of truth for legality and wins; the frontend never decides them.
 
-- `src-core/` — crate `four-in-a-row-core`, a UI-agnostic Rust crate holding the whole rules engine: grid state, move legality, gravity drop, win detection, and draw detection (`Game` in `src-core/src/game.rs`). Its only dependency is the vendored `game-player` crate. No Tauri dependency, so its tests run headless.
-- `src-tauri/` — crate `four-in-a-row`, the thin Tauri shell. Owns the window and the single `Mutex<Game>` of managed state, and exposes the core over three commands (`new_game`, `drop_disc`, `get_state`) using a small camelCase JSON protocol built with serde. No game logic lives here; its tests pin the wire shapes.
-- `src/` — the frontend, vanilla TypeScript with Vite (no framework). `api.ts` is the only module that talks to the Tauri IPC layer; `view.ts` renders the game state into the DOM; `main.ts` is the controller wiring user input to `api` and `view`; `styles.css` holds all styling.
+- `src-core/` — crate `four-in-a-row-core`, a UI-agnostic Rust crate holding the whole rules engine: grid state, move legality, gravity drop, win detection, and draw detection (`Game` in `src-core/src/game.rs`). It also holds the computer player in `src-core/src/ai.rs`: a bitboard `Position`, an `Evaluator` scoring the 69 win lines, a `Generator` yielding legal columns center-first for better pruning, and the entry point `choose_move(game, depth) -> Option<usize>`, which runs the vendored `game-player` crate's alpha-beta minimax search at a fixed depth (no time limit, no iterative deepening) and returns the column to play, or `None` when the game is already over. Its only dependency is the vendored `game-player` crate. No Tauri dependency, so its tests run headless.
+- `src-tauri/` — crate `four-in-a-row`, the thin Tauri shell. Owns the window and a single `Mutex<App>` of managed state, where `App` holds the `Game`, a `Config` (per-player `Human`/`Computer` plus the search depth), a `thinking` flag, a `paused` flag, and a `generation` counter. It exposes the core over four commands (`new_game`, `drop_disc`, `get_state`, `set_paused`) using a small camelCase JSON protocol built with serde. When it is a computer's turn, the shell clones the `Game` and runs `choose_move` on a background thread — the lock is never held across the search; when the search finishes, the shell discards the result if the captured `generation` no longer matches (this is how starting a new game cancels an in-flight search), otherwise applies the move and emits an `ai-move` event carrying the full game state. No game logic lives here; its tests pin the wire shapes.
+- `src/` — the frontend, vanilla TypeScript with Vite (no framework). `api.ts` is the only module that talks to the Tauri IPC layer, including subscribing to the `ai-move` event; `view.ts` renders the game state into the DOM; `main.ts` is the controller wiring user input to `api` and `view`; `styles.css` holds all styling.
 
 ### Wire protocol
 
@@ -16,11 +16,15 @@ Defined by the shell's serde structs and mirrored by hand in `src/api.ts` — ch
 
 - camelCase JSON; the board is column-major: `board[col][row]`, col 0 = leftmost, row 0 = bottom.
 - Cells and players are string codes: `"empty" | "p1" | "p2"`.
-- `drop_disc` rejects with error-code strings: `invalidColumn | columnFull | gameOver`.
+- `drop_disc` rejects with error-code strings: `invalidColumn | columnFull | gameOver | notHumanTurn` — `notHumanTurn` covers both "it is a computer's turn" and "a search is in flight".
+- `new_game` takes `{ p1, p2, searchDepth }`, where `p1`/`p2` are `"human" | "computer"` and `searchDepth` is a ply count in `1..=42`; an out-of-range depth is rejected with the error code `invalidDepth`.
+- `GameStateDto` also carries `players` (an object `{ p1, p2 }` of `"human" | "computer"`), `searchDepth`, `thinking`, `paused`, and `generation`, alongside the older board/turn/status fields.
+- `generation` is the session counter the shell bumps on every new game, and it is on the wire for a reason: command replies and `ai-move` events reach the front end over two channels with no ordering between them, so a fast search can push its state before the reply to the move that triggered it arrives. The front end orders states by `(generation, moveCount)` and ignores any that is older than the one it already holds. Anything that changes when a state is produced has to keep that pair monotonic.
+- The shell pushes an `ai-move` event carrying a full `GameStateDto` after it applies a computer move; the front end subscribes to it once at startup. This event payload is part of the hand-mirrored protocol too — a protocol change has to keep it in sync, not just the command return values.
 
 ### Vendored `game-player`
 
-`vendor/game-player` is a git submodule (`https://github.com/jambolo/game-player.git`) providing the AI-player scaffolding for the planned computer player. It is third-party code — do not edit it from this repo; change it upstream and bump the submodule pointer.
+`vendor/game-player` is a git submodule (`https://github.com/jambolo/game-player.git`) providing the AI-player scaffolding. It now backs the shipped computer player in `src-core/src/ai.rs`, whose minimax search and transposition table are used as published. It is third-party code — do not edit it from this repo; change it upstream and bump the submodule pointer.
 
 - The workspace `exclude`s it, so `cargo test --workspace`, `cargo fmt --all`, and `cargo clippy --workspace` skip it. It still compiles as a path dependency of `src-core`.
 - Bump it with `git submodule update --remote vendor/game-player`, then commit the new pointer.
@@ -104,6 +108,7 @@ Test layout:
 
 - `src/*.test.ts` — Vitest, jsdom environment, matched by `include: ['src/**/*.test.ts']` in `vite.config.ts`. `api.test.ts` mocks `@tauri-apps/api`; `view.test.ts` asserts DOM output; `main.test.ts` covers the controller wiring.
 - `src-core/src/game.rs` — unit tests for the rules engine, headless and fast.
+- `src-core/src/ai.rs` — unit tests for the computer player: bitboard round-trip against `Game`, evaluator terminal values, and `choose_move` behaviour, headless like the rules tests.
 - `src-tauri/src/main.rs` — tests that pin the JSON wire shapes, not game logic.
 
 Rust coverage (as CI runs it):
@@ -156,6 +161,7 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets --all-features
 - A command that returns an error surfaces in the frontend as a rejected promise carrying one of the error-code strings.
 - If a call fails with "command not found", check that the command is registered in the `invoke_handler` in `src-tauri/src/main.rs` and that the name in `src/api.ts` matches.
 - Serialization mismatches (a renamed field, a changed enum code) show up as a runtime type error in the frontend, not a compile error — the wire protocol is mirrored by hand.
+- A computer move arrives as an `ai-move` event, not as a command return value — if the board stops updating after a computer's turn, check that the front end's event subscription is live (it is set up once at startup in `src/api.ts` / `src/main.ts`).
 
 ### Common problems
 

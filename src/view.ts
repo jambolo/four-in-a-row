@@ -1,26 +1,39 @@
-// Pure DTO-to-DOM renderer for the game board, status line and restart
-// button. This module never talks to the backend and never decides legality
-// or win conditions — it only turns a `GameState` the Rust core already
-// produced into DOM, and back out again (the hover ghost) into query params
-// the core understands. Keeping rendering here, isolated from `main.ts`'s
-// event wiring, is what makes it unit-testable with plain jsdom fixtures.
+// Pure DTO-to-DOM renderer for the game board, status line, restart button
+// and Pause/Resume control. This module never talks to the backend and never
+// decides legality or win conditions — it only turns a `GameState` the Rust
+// core already produced into DOM, including whose turn it is to act (human
+// vs. computer) and whether a search is in flight. Keeping rendering here,
+// isolated from `main.ts`'s event wiring, is what makes it unit-testable
+// with plain jsdom fixtures.
 
 import type { GameState, PlayerId } from './api';
 
 const COLUMNS = 7;
 const ROWS = 6;
 
-/** The three elements this module renders into. Owned by `index.html`. */
+/** The elements this module renders into. Owned by `index.html`. */
 export interface ViewElements {
   board: HTMLElement;
   status: HTMLElement;
   restart: HTMLElement;
+  /** The Pause/Resume button, when the page has one. */
+  pause?: HTMLElement;
 }
 
 const PLAYER_NAMES: Record<PlayerId, string> = {
   p1: 'Red',
   p2: 'Yellow',
 };
+
+/**
+ * Whether the person at the keyboard may drop a disc right now: the game
+ * is running, no search is in flight, and the side to move is played by a
+ * human. Mirrors the backend's own `notHumanTurn` guard, so the UI never
+ * fires a request the backend would reject.
+ */
+export function isHumanTurn(state: GameState): boolean {
+  return state.status === 'inProgress' && !state.thinking && state.players[state.toMove] === 'human';
+}
 
 /** The exact status-line text for the current game state. */
 export function statusText(state: GameState): string {
@@ -30,6 +43,9 @@ export function statusText(state: GameState): string {
   if (state.status === 'won') {
     // `winner` is non-null exactly when status is 'won' (api.ts contract).
     return `${PLAYER_NAMES[state.winner as PlayerId]} wins!`;
+  }
+  if (state.thinking) {
+    return `${PLAYER_NAMES[state.toMove]} is thinking…`;
   }
   return `${PLAYER_NAMES[state.toMove]}'s turn`;
 }
@@ -63,7 +79,7 @@ function buildColumn(state: GameState, col: number): HTMLButtonElement {
   column.className = 'column';
   column.setAttribute('data-col', String(col));
 
-  const legal = state.status === 'inProgress' && state.legalMoves.includes(col);
+  const legal = isHumanTurn(state) && state.legalMoves.includes(col);
   column.setAttribute('data-legal', String(legal));
   column.setAttribute('aria-disabled', String(!legal));
   column.setAttribute('aria-label', `Drop in column ${col + 1}`);
@@ -79,6 +95,7 @@ function buildColumn(state: GameState, col: number): HTMLButtonElement {
 /** Rebuild `el.status`'s children: an optional swatch, then the status text. */
 function renderStatus(status: HTMLElement, state: GameState): void {
   status.replaceChildren();
+  status.setAttribute('data-thinking', String(state.status === 'inProgress' && state.thinking));
 
   if (state.status !== 'draw') {
     const swatch = document.createElement('span');
@@ -102,7 +119,7 @@ export function render(el: ViewElements, state: GameState): void {
     columns.push(buildColumn(state, col));
   }
   el.board.replaceChildren(...columns);
-  el.board.setAttribute('data-locked', String(state.status !== 'inProgress'));
+  el.board.setAttribute('data-locked', String(!isHumanTurn(state)));
 
   renderStatus(el.status, state);
 
@@ -111,6 +128,13 @@ export function render(el: ViewElements, state: GameState): void {
   const over = state.status !== 'inProgress';
   el.restart.textContent = over ? 'Play Again' : 'Restart';
   el.restart.classList.toggle('button--primary', over);
+
+  // The pause control only means anything when a search can run at all.
+  if (el.pause !== undefined) {
+    const versusComputer = state.players.p1 === 'computer' || state.players.p2 === 'computer';
+    el.pause.hidden = !versusComputer;
+    el.pause.textContent = state.paused ? 'Resume' : 'Pause';
+  }
 }
 
 /** Remove any hover-preview ghost disc from `board`. */
@@ -123,12 +147,12 @@ export function clearGhost(board: HTMLElement): void {
 
 /**
  * Preview where a disc would land in `col` if the current player dropped
- * one now. No-op when the column isn't legal or the game is over.
+ * one now. No-op when the column isn't legal or it isn't a human's turn.
  */
 export function showGhost(board: HTMLElement, col: number, state: GameState): void {
   clearGhost(board);
 
-  if (state.status !== 'inProgress' || !state.legalMoves.includes(col)) {
+  if (!isHumanTurn(state) || !state.legalMoves.includes(col)) {
     return;
   }
 
