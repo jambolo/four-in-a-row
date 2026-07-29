@@ -104,65 +104,87 @@ impl From<&Game> for Position {
 /// The value returned when P1 (Alice) has won; its negation means P2 (Bob) won.
 const WIN_VALUE: f32 = 10_000.0;
 
-/// Score of a line by how many of one player's discs it holds, when the other
-/// player has none in it.
-const SCORE: [f32; 4] = [0.0, 1.0, 8.0, 64.0];
-
-/// Bit masks of the 69 four-cell lines that can win the game.
-const LINES: [u64; 69] = build_lines();
-
-/// Returns the mask of the single cell `(col, row)`.
-const fn bit(col: usize, row: usize) -> u64 {
-    1u64 << (col * 7 + row)
-}
-
-/// Builds the win-line masks: 24 horizontal, 21 vertical, 12 up-right diagonal
-/// and 12 down-right diagonal.
-const fn build_lines() -> [u64; 69] {
-    let mut lines = [0u64; 69];
-    let mut n = 0usize;
-    let mut col = 0usize;
-    while col + 3 < COLS {
-        let mut row = 0usize;
-        while row < ROWS {
-            lines[n] = bit(col, row) | bit(col + 1, row) | bit(col + 2, row) | bit(col + 3, row);
-            n += 1;
-            row += 1;
-        }
-        col += 1;
-    }
-    col = 0;
-    while col < COLS {
-        let mut row = 0usize;
-        while row + 3 < ROWS {
-            lines[n] = bit(col, row) | bit(col, row + 1) | bit(col, row + 2) | bit(col, row + 3);
-            n += 1;
-            row += 1;
-        }
-        col += 1;
-    }
-    col = 0;
-    while col + 3 < COLS {
-        let mut row = 0usize;
-        while row + 3 < ROWS {
-            lines[n] = bit(col, row) | bit(col + 1, row + 1) | bit(col + 2, row + 2) | bit(col + 3, row + 3);
-            n += 1;
-            row += 1;
-        }
-        col += 1;
-    }
-    col = 0;
-    while col + 3 < COLS {
-        let mut row = 3usize;
-        while row < ROWS {
-            lines[n] = bit(col, row) | bit(col + 1, row - 1) | bit(col + 2, row - 2) | bit(col + 3, row - 3);
-            n += 1;
-            row += 1;
-        }
-        col += 1;
-    }
-    lines
-}
+/// Bit masks of the 69 four-cell lines that can win the game: 24 horizontal,
+/// 21 vertical, 12 up-right diagonal and 12 down-right diagonal, in that order.
+///
+/// The table is hard-coded so it costs nothing at run time;
+/// `tests::line_table_matches_generated_lines` re-derives it from the board
+/// geometry and pins every entry.
+const LINES: [u64; 69] = [
+    // Horizontal: origin at `(col, row)` for `col` in `0..=3`, `row` in `0..=5`.
+    0x0000_0000_0020_4081,
+    0x0000_0000_0040_8102,
+    0x0000_0000_0081_0204,
+    0x0000_0000_0102_0408,
+    0x0000_0000_0204_0810,
+    0x0000_0000_0408_1020,
+    0x0000_0000_1020_4080,
+    0x0000_0000_2040_8100,
+    0x0000_0000_4081_0200,
+    0x0000_0000_8102_0400,
+    0x0000_0001_0204_0800,
+    0x0000_0002_0408_1000,
+    0x0000_0008_1020_4000,
+    0x0000_0010_2040_8000,
+    0x0000_0020_4081_0000,
+    0x0000_0040_8102_0000,
+    0x0000_0081_0204_0000,
+    0x0000_0102_0408_0000,
+    0x0000_0408_1020_0000,
+    0x0000_0810_2040_0000,
+    0x0000_1020_4080_0000,
+    0x0000_2040_8100_0000,
+    0x0000_4081_0200_0000,
+    0x0000_8102_0400_0000,
+    // Vertical: origin at `(col, row)` for `col` in `0..=6`, `row` in `0..=2`.
+    0x0000_0000_0000_000F,
+    0x0000_0000_0000_001E,
+    0x0000_0000_0000_003C,
+    0x0000_0000_0000_0780,
+    0x0000_0000_0000_0F00,
+    0x0000_0000_0000_1E00,
+    0x0000_0000_0003_C000,
+    0x0000_0000_0007_8000,
+    0x0000_0000_000F_0000,
+    0x0000_0000_01E0_0000,
+    0x0000_0000_03C0_0000,
+    0x0000_0000_0780_0000,
+    0x0000_0000_F000_0000,
+    0x0000_0001_E000_0000,
+    0x0000_0003_C000_0000,
+    0x0000_0078_0000_0000,
+    0x0000_00F0_0000_0000,
+    0x0000_01E0_0000_0000,
+    0x0000_3C00_0000_0000,
+    0x0000_7800_0000_0000,
+    0x0000_F000_0000_0000,
+    // Up-right diagonal: origin at `(col, row)` for `col` in `0..=3`, `row` in `0..=2`.
+    0x0000_0000_0101_0101,
+    0x0000_0000_0202_0202,
+    0x0000_0000_0404_0404,
+    0x0000_0000_8080_8080,
+    0x0000_0001_0101_0100,
+    0x0000_0002_0202_0200,
+    0x0000_0040_4040_4000,
+    0x0000_0080_8080_8000,
+    0x0000_0101_0101_0000,
+    0x0000_2020_2020_0000,
+    0x0000_4040_4040_0000,
+    0x0000_8080_8080_0000,
+    // Down-right diagonal: origin at `(col, row)` for `col` in `0..=3`, `row` in `3..=5`.
+    0x0000_0000_0020_8208,
+    0x0000_0000_0041_0410,
+    0x0000_0000_0082_0820,
+    0x0000_0000_1041_0400,
+    0x0000_0000_2082_0800,
+    0x0000_0000_4104_1000,
+    0x0000_0008_2082_0000,
+    0x0000_0010_4104_0000,
+    0x0000_0020_8208_0000,
+    0x0000_0410_4100_0000,
+    0x0000_0820_8200_0000,
+    0x0000_1041_0400_0000,
+];
 
 /// The static evaluation function used by the search.
 pub struct Evaluator;
@@ -183,6 +205,11 @@ impl StaticEvaluator for Evaluator {
         if state.move_count as usize == COLS * ROWS {
             return 0.0;
         }
+
+        /// Score of a line by how many of one player's discs it holds, when the other
+        /// player has none in it.
+        const LINE_SCORE: [f32; 4] = [0.0, 1.0, 8.0, 64.0];
+
         let mut total = 0.0;
         for line in LINES {
             let a = (state.masks[0] & line).count_ones() as usize;
@@ -196,7 +223,7 @@ impl StaticEvaluator for Evaluator {
             if a > 0 && b > 0 {
                 continue;
             }
-            total += SCORE[a] - SCORE[b];
+            total += LINE_SCORE[a] - LINE_SCORE[b];
         }
         total
     }
@@ -252,6 +279,62 @@ mod tests {
             m |= 1u64 << (col * 7 + row);
         }
         m
+    }
+
+    /// Returns the mask of the single cell `(col, row)`.
+    const fn bit(col: usize, row: usize) -> u64 {
+        1u64 << (col * 7 + row)
+    }
+
+    /// Derives the win-line masks from the board geometry: 24 horizontal, 21
+    /// vertical, 12 up-right diagonal and 12 down-right diagonal, in that order.
+    ///
+    /// This is the reference implementation the hard-coded [`LINES`] table is
+    /// checked against; it is deliberately kept independent of that table.
+    const fn build_lines() -> [u64; 69] {
+        let mut lines = [0u64; 69];
+        let mut n = 0usize;
+        let mut col = 0usize;
+        while col + 3 < COLS {
+            let mut row = 0usize;
+            while row < ROWS {
+                lines[n] = bit(col, row) | bit(col + 1, row) | bit(col + 2, row) | bit(col + 3, row);
+                n += 1;
+                row += 1;
+            }
+            col += 1;
+        }
+        col = 0;
+        while col < COLS {
+            let mut row = 0usize;
+            while row + 3 < ROWS {
+                lines[n] = bit(col, row) | bit(col, row + 1) | bit(col, row + 2) | bit(col, row + 3);
+                n += 1;
+                row += 1;
+            }
+            col += 1;
+        }
+        col = 0;
+        while col + 3 < COLS {
+            let mut row = 0usize;
+            while row + 3 < ROWS {
+                lines[n] = bit(col, row) | bit(col + 1, row + 1) | bit(col + 2, row + 2) | bit(col + 3, row + 3);
+                n += 1;
+                row += 1;
+            }
+            col += 1;
+        }
+        col = 0;
+        while col + 3 < COLS {
+            let mut row = 3usize;
+            while row < ROWS {
+                lines[n] = bit(col, row) | bit(col + 1, row - 1) | bit(col + 2, row - 2) | bit(col + 3, row - 3);
+                n += 1;
+                row += 1;
+            }
+            col += 1;
+        }
+        lines
     }
 
     /// Replays a column sequence into a fresh `Game`, asserting every move is legal.
@@ -333,6 +416,14 @@ mod tests {
         let e = game_from(&[3]);
         let f = game_from(&[3, 4]);
         assert_ne!(Position::from(&e).fingerprint(), Position::from(&f).fingerprint());
+    }
+
+    #[test]
+    fn line_table_matches_generated_lines() {
+        let expected = build_lines();
+        for (i, (&got, &want)) in LINES.iter().zip(expected.iter()).enumerate() {
+            assert_eq!(got, want, "LINES[{i}] is {got:#018x}, expected {want:#018x}");
+        }
     }
 
     #[test]
