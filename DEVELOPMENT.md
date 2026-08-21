@@ -6,7 +6,7 @@ Everything needed to set up, build, run, debug, and test Four In A Row.
 
 Three layers with strict separation. The Rust core is the single source of truth for legality and wins; the frontend never decides them.
 
-- `src-core/` — crate `four-in-a-row-core`, a UI-agnostic Rust crate holding the whole rules engine: grid state, move legality, gravity drop, win detection, and draw detection (`Game` in `src-core/src/game.rs`). It also holds the computer player in `src-core/src/ai.rs`: a bitboard `Position`, an `Evaluator` scoring the 69 win lines, a `Generator` yielding legal columns center-first for better pruning, and the entry point `choose_move(game, depth) -> Option<usize>`, which runs the vendored `game-player` crate's alpha-beta minimax search at a fixed depth (no time limit, no iterative deepening) and returns the column to play, or `None` when the game is already over. Its only dependency is the vendored `game-player` crate. No Tauri dependency, so its tests run headless.
+- `src-core/` — crate `four-in-a-row-core`, a UI-agnostic Rust crate holding the whole rules engine: grid state, move legality, gravity drop, win detection, and draw detection (`Game` in `src-core/src/game.rs`). It also holds the computer player in `src-core/src/ai.rs`: a bitboard `Position`, an `Evaluator` scoring the 69 win lines, a `Generator` yielding legal columns center-first for better pruning, and the entry point `choose_move(game, depth) -> Option<usize>`, which runs the `game-player` crate's alpha-beta minimax search at a fixed depth (no time limit, no iterative deepening) and returns the column to play, or `None` when the game is already over. Its only dependency is the `game-player` crate. No Tauri dependency, so its tests run headless.
 - `src-tauri/` — crate `four-in-a-row`, the thin Tauri shell. Owns the window and a single `Mutex<App>` of managed state, where `App` holds the `Game`, a `Config` (per-player `Human`/`Computer` plus the search depth), a `thinking` flag, a `paused` flag, and a `generation` counter. It exposes the core over four commands (`new_game`, `drop_disc`, `get_state`, `set_paused`) using a small camelCase JSON protocol built with serde. When it is a computer's turn, the shell clones the `Game` and runs `choose_move` on a background thread — the lock is never held across the search; when the search finishes, the shell discards the result if the captured `generation` no longer matches (this is how starting a new game cancels an in-flight search), otherwise applies the move and emits an `ai-move` event carrying the full game state. No game logic lives here; its tests pin the wire shapes.
 - `src/` — the frontend, vanilla TypeScript with Vite (no framework). `api.ts` is the only module that talks to the Tauri IPC layer, including subscribing to the `ai-move` event; `view.ts` renders the game state into the DOM; `main.ts` is the controller wiring user input to `api` and `view`; `styles.css` holds all styling.
 
@@ -22,12 +22,11 @@ Defined by the shell's serde structs and mirrored by hand in `src/api.ts` — ch
 - `generation` is the session counter the shell bumps on every new game, and it is on the wire for a reason: command replies and `ai-move` events reach the front end over two channels with no ordering between them, so a fast search can push its state before the reply to the move that triggered it arrives. The front end orders states by `(generation, moveCount)` and ignores any that is older than the one it already holds. Anything that changes when a state is produced has to keep that pair monotonic.
 - The shell pushes an `ai-move` event carrying a full `GameStateDto` after it applies a computer move; the front end subscribes to it once at startup. This event payload is part of the hand-mirrored protocol too — a protocol change has to keep it in sync, not just the command return values.
 
-### Vendored `game-player`
+### `game-player` dependency
 
-`vendor/game-player` is a git submodule (`https://github.com/jambolo/game-player.git`) providing the AI-player scaffolding. It now backs the shipped computer player in `src-core/src/ai.rs`, whose minimax search and transposition table are used as published. It is third-party code — do not edit it from this repo; change it upstream and bump the submodule pointer.
+`game-player` is a git dependency of `src-core` (`https://github.com/jambolo/game-player.git`, pinned to tag `v0.4.0` in `src-core/Cargo.toml`) providing the AI-player scaffolding. It backs the shipped computer player in `src-core/src/ai.rs`, whose minimax search and transposition table are used as published. It is third-party code — do not edit it from this repo; change it upstream, cut a new tag, and bump the `tag` in `src-core/Cargo.toml`.
 
-- The workspace `exclude`s it, so `cargo test --workspace`, `cargo fmt --all`, and `cargo clippy --workspace` skip it. It still compiles as a path dependency of `src-core`.
-- Bump it with `git submodule update --remote vendor/game-player`, then commit the new pointer.
+- Cargo fetches it on first build (network required once); `Cargo.lock` pins the exact commit. After a tag bump, run `cargo update -p game-player` and commit the lock.
 
 ### Reference docs
 
@@ -60,17 +59,16 @@ Platform toolchains required by Tauri:
 ```bash
 git clone https://github.com/jambolo/four-in-a-row.git
 cd four-in-a-row
-git submodule update --init --recursive   # fetch vendor/game-player — required before any cargo command
 pnpm install
 pnpm build                                # populate dist/ before any cargo build
 ```
 
-`git submodule update --init --recursive` is not optional: without it `vendor/game-player` is an empty directory and every `cargo` command fails to resolve the path dependency.
+The first `cargo` command fetches `game-player` from GitHub, so it needs network access once; `cargo fetch` afterwards works offline.
 
 ### Recommended editor setup
 
 - **VS Code** — `rust-analyzer`, `tauri-vscode`, `ESLint`, `Prettier`.
-- Point `rust-analyzer` at the workspace root; `vendor/game-player` is excluded from the workspace and is analyzed only as a path dependency.
+- Point `rust-analyzer` at the workspace root.
 
 ## Build order
 
@@ -167,7 +165,7 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets --all-features
 
 | Symptom | Cause | Fix |
 | --- | --- | --- |
-| `cargo` fails resolving `game-player` | Submodule not fetched | `git submodule update --init --recursive` |
+| `cargo` fails fetching `game-player` | No network access to GitHub | Retry online; `cargo fetch` once caches it for offline builds |
 | Rust build fails in `generate_context!` | `dist/` missing | `pnpm build` |
 | `Port 5173 is already in use` | Stale dev server | Kill the process holding the port (`strictPort` prevents a fallback) |
 | App window blank | Vite not ready or a CSP violation | Check the terminal and devtools console; the CSP is set in `tauri.conf.json` |
@@ -180,8 +178,6 @@ cargo fmt --all --check && cargo clippy --workspace --all-targets --all-features
 - **Build & Test** — matrix over `ubuntu-latest`, `windows-latest`, `macos-latest`: install, `pnpm build`, `pnpm test`, `cargo build --workspace --all-targets`, `cargo test --workspace`.
 - **Lint & Format** — pull requests only: `cargo fmt --all --check`, clippy with `-D warnings`, `pnpm lint`, `pnpm format:check`.
 - **Coverage** — `develop` only: `cargo llvm-cov` plus `pnpm coverage`, uploaded to Codecov.
-
-All checkouts use `submodules: recursive`.
 
 ## Releases and versioning
 
